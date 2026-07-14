@@ -17,7 +17,7 @@ Run them in this order for the full walk-through. Each skill also works standalo
 | 3 | `scalardb-generate-config` | Generate ScalarDB Cluster config through block-by-block Q&A (Envoy / cluster / storages): Helm `custom-values.yaml` + client `scalardb.properties` / `scalardb_sql.properties` + secrets script. Auto-detects the demo databases. Indirect client mode, SQL enabled. | **available** |
 | 4 | `scalardb-start-scalardb-cluster` | Start ScalarDB Cluster via Helm using the generated values, injecting your license key as a Kubernetes Secret (never written to files), and verify the rollout. | **available** |
 | 5 | `scalardb-generate-schema-file` | Generate `schema.json` from a preset (Order-Inventory or Transfer) plus a `load-schema.sh` that runs the Cluster Schema Loader as a Kubernetes Job. | **available** |
-| 6 | `scalardb-generate-springboot-starter` | Scaffold a Spring Boot 3.5 / Java 17 / Gradle project from a schema file (generated or your own), exposing CRUD REST APIs in **both** the ScalarDB Java API and the ScalarDB SQL API, with Swagger UI. | planned |
+| 6 | `scalardb-generate-springboot-starter` | Scaffold a Spring Boot 3.5 / Java 17 / Gradle project from a schema file (generated or your own), exposing CRUD REST APIs in **both** the ScalarDB Java API (`/<table>`) and the ScalarDB SQL API (`/<table>-sql`), with retry handling and Swagger UI. | **available** |
 | 7 | `scalardb-validate-config` | Read-only audit of existing ScalarDB configuration files against a reference-backed rule catalog. | planned |
 | 8 | `scalardb-stop-sample-db` | Stop the demo databases (demo data is discarded — volumes are non-persistent). | **available** |
 
