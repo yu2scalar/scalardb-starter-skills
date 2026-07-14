@@ -1,0 +1,25 @@
+# Build / IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+
+# Java / Gradle artefacts (only relevant if you smoke-build a generated project here)
+build/
+.gradle/
+out/
+
+# Local skill output / scratch
+/tmp/
+/scratch/
+*.local.*
+
+# Claude Code local
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Contributor-only files: design docs live in the sibling scalardb-skills
+# workspace and must not be committed here.
+/docs/
+/CLAUDE.md

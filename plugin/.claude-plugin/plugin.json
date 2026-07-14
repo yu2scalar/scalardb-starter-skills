@@ -1,0 +1,10 @@
+{
+  "name": "scalardb-starter-skills",
+  "version": "0.1.0",
+  "description": "Beginner-friendly skills to support your first ScalarDB Cluster app. Walk the skills in order to go from an empty Kubernetes cluster to a running Spring Boot CRUD REST application backed by ScalarDB Cluster: select and verify a Kubernetes environment (AKS / EKS / GKE / minikube), start demo PostgreSQL + MySQL databases in-cluster, generate ScalarDB Cluster config (Helm custom values + client properties, indirect mode, SQL enabled) through block-by-block Q&A, start ScalarDB Cluster via Helm with license-key Secret injection, generate a schema file from presets (Order-Inventory / Transfer), scaffold a Spring Boot starter exposing CRUD REST APIs in both the Java API and the SQL API, and audit existing configurations against a reference-backed rule catalog. Targets ScalarDB 3.18.0.",
+  "author": {
+    "name": "Yuji Ochiai",
+    "email": "yuji.ochiai@scalar-labs.com"
+  },
+  "keywords": ["scalardb", "spring-boot", "starter", "kubernetes", "helm", "sql"]
+}
