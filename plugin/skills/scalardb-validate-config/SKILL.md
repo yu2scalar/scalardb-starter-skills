@@ -43,7 +43,7 @@ Severity: **Error** = will fail at startup or cannot work as written; **Warning*
 | S1 | `multi_storage.namespace_mapping` entries use `:` separator (an `=` inside an entry is the classic mistake) | Error | `MultiStorageConfig.java:123` — `split(":", -1)` |
 | S2 | mapping contains a `coordinator:<storage>` entry and `consensus_commit.coordinator.namespace` is set consistently | Warning | starter convention; coordinator tables land on `default_storage` otherwise |
 | S3 | `multi_storage.default_storage` names a storage defined in `multi_storage.storages` | Error | reference `10-configuration-core.md` |
-| S4 | every storage listed in `multi_storage.storages` has `.storage` and `.contact_points` | Error | 〃 |
+| S4 | every storage listed in `multi_storage.storages` has `.storage` and `.contact_points` | Error | reference `10-configuration-core.md` |
 | S5 | non-JDBC storage with `cross_partition_scan.ordering.enabled=true` → startup exception | Error | `Dynamo.java:58-61` / `Cassandra.java:51-54` / `Cosmos.java:53-56` |
 | S6 | non-JDBC storage with `cross_partition_scan.filtering.enabled=true` → in-JVM fetch-then-filter, OOM risk on large scans | Warning | `FilterableScanner.java:46` |
 | S7 | `cluster.auth.enabled=true` together with `graphql.enabled=true` → GraphQL server refuses to start | Error | `GraphQlServer.java:49-56` |
