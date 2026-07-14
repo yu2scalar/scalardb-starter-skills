@@ -14,7 +14,7 @@ Run them in this order for the full walk-through. Each skill also works standalo
 |---|---|---|---|
 | 1 | `scalardb-set-k8s-env` | Select a Kubernetes environment (AKS / EKS / GKE / minikube), switch kubectl context, and verify connectivity. Starts minikube for you if needed; cloud clusters must already exist. | **available** |
 | 2 | `scalardb-start-sample-db` | Start demo PostgreSQL + MySQL databases in-cluster (credentials `scalaradmin` / `scalaradmin` — **demo use only**). | **available** |
-| 3 | `scalardb-generate-config` | Generate ScalarDB Cluster config through block-by-block Q&A (Envoy / cluster / storages): Helm `custom-values.yaml` + client `scalardb.properties` / `scalardb_sql.properties` + secrets script. Auto-detects the demo databases. Indirect client mode, SQL enabled. | planned |
+| 3 | `scalardb-generate-config` | Generate ScalarDB Cluster config through block-by-block Q&A (Envoy / cluster / storages): Helm `custom-values.yaml` + client `scalardb.properties` / `scalardb_sql.properties` + secrets script. Auto-detects the demo databases. Indirect client mode, SQL enabled. | **available** |
 | 4 | `scalardb-start-scalardb-cluster` | Start ScalarDB Cluster via Helm using the generated values, injecting your license key as a Kubernetes Secret (never written to files), and verify the rollout. | planned |
 | 5 | `scalardb-generate-schema-file` | Generate `schema.json` from a preset (Order-Inventory or Transfer) plus a schema-loading script. | planned |
 | 6 | `scalardb-generate-springboot-starter` | Scaffold a Spring Boot 3.5 / Java 17 / Gradle project from a schema file (generated or your own), exposing CRUD REST APIs in **both** the ScalarDB Java API and the ScalarDB SQL API, with Swagger UI. | planned |
