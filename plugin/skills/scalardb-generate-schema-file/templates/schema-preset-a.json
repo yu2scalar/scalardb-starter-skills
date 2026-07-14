@@ -1,0 +1,34 @@
+{
+  "order.orders": {
+    "transaction": true,
+    "partition-key": ["order_id"],
+    "columns": {
+      "order_id": "TEXT",
+      "customer_id": "TEXT",
+      "status": "TEXT",
+      "total_amount": "INT",
+      "created_at": "BIGINT"
+    }
+  },
+  "order.order_items": {
+    "transaction": true,
+    "partition-key": ["order_id"],
+    "clustering-key": ["item_id ASC"],
+    "columns": {
+      "order_id": "TEXT",
+      "item_id": "TEXT",
+      "quantity": "INT",
+      "unit_price": "INT"
+    }
+  },
+  "inventory.items": {
+    "transaction": true,
+    "partition-key": ["item_id"],
+    "columns": {
+      "item_id": "TEXT",
+      "name": "TEXT",
+      "stock": "INT",
+      "unit_price": "INT"
+    }
+  }
+}
