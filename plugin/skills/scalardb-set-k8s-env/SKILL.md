@@ -6,7 +6,7 @@ description: Select the Kubernetes environment (AKS / EKS / GKE / minikube) to r
 # scalardb-set-k8s-env
 
 > Status: **v0.1.0 (2026-07-14 — plan-006 P2 initial implementation)**
-> Targets ScalarDB 3.18.0. Skill 1 of 8 in the scalardb-starter-skills walk-through.
+> Targets ScalarDB 3.18.0. Skill 1 of 9 in the scalardb-starter-skills walk-through.
 
 ## Overview
 

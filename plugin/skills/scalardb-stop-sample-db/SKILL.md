@@ -6,7 +6,7 @@ description: Stop and remove the demo PostgreSQL + MySQL databases started by sc
 # scalardb-stop-sample-db
 
 > Status: **v0.1.0 (2026-07-14 — plan-006 P2 initial implementation)**
-> Targets ScalarDB 3.18.0. Skill 8 of 8 in the scalardb-starter-skills walk-through.
+> Targets ScalarDB 3.18.0. Skill 9 of 9 in the scalardb-starter-skills walk-through.
 
 ## Overview
 
@@ -14,7 +14,7 @@ Tears down everything `scalardb-start-sample-db` created by deleting the `scalar
 
 ### What this skill does NOT do
 
-- Touch anything outside the `scalardb-sample-db` namespace (ScalarDB Cluster itself is stopped separately, e.g. `helm uninstall`)
+- Touch anything outside the `scalardb-sample-db` namespace (ScalarDB Cluster itself is stopped separately by `/scalardb-stop-scalardb-cluster`)
 - Delete databases the user configured themselves in `scalardb-generate-config`
 - Back up data (demo data is by design disposable)
 
@@ -47,4 +47,4 @@ Verify with `kubectl get namespace scalardb-sample-db` (must return NotFound). I
 
 - Confirm the namespace is gone.
 - If `./.scalardb-starter-skills.json` exists and has a `sampleDb` section, set `"status": "stopped"` (keep the endpoints for history).
-- Remind the user: if a running ScalarDB Cluster was using these databases as storages, it will now fail until reconfigured or stopped.
+- Remind the user: if a running ScalarDB Cluster was using these databases as storages, it will now fail until reconfigured or stopped (`/scalardb-stop-scalardb-cluster` — ideally run it *before* this skill).

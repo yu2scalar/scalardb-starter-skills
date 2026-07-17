@@ -7,7 +7,7 @@ description: Scaffold a Spring Boot 3.5 / Java 17 / Gradle project from a Scalar
 
 > Status: **v0.1.0 (2026-07-14 — plan-006 P6 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0**, Spring Boot **3.5.13**, Java **17**, Gradle (wrapper bundled).
-> Skill 6 of 8 in the scalardb-starter-skills walk-through.
+> Skill 6 of 9 in the scalardb-starter-skills walk-through.
 
 ## Overview
 
