@@ -10,6 +10,8 @@
 
 envoy:
   enabled: true
+  # Subchart default is 3 (production HA); 1 is plenty for this starter.
+  replicaCount: {{ENVOY_REPLICA_COUNT}}
   service:
     # {{ENVOY_SERVICE_TYPE_COMMENT}}
     type: {{ENVOY_SERVICE_TYPE}}

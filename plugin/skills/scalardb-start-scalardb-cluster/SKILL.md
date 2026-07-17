@@ -7,7 +7,7 @@ description: Start ScalarDB Cluster on the current Kubernetes cluster using the 
 
 > Status: **v0.1.0 (2026-07-14 — plan-006 P4 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0** / Helm chart **scalar-labs/scalardb-cluster 1.11.1**.
-> Skill 4 of 8 in the scalardb-starter-skills walk-through.
+> Skill 4 of 9 in the scalardb-starter-skills walk-through.
 
 ## Overview
 
@@ -23,7 +23,7 @@ Takes the output of `scalardb-generate-config` (`scalardb/helm/custom-values.yam
 - Ask for, store, or echo the license key value — it must arrive via the environment
 - Load schemas (that is `scalardb-generate-schema-file`'s `load-schema.sh`)
 - gRPC/SQL connectivity tests beyond pod readiness
-- Uninstall (the report shows the `helm uninstall` command for later)
+- Uninstall (that is `/scalardb-stop-scalardb-cluster`)
 
 ## Phase 0 — preflight
 
@@ -32,22 +32,48 @@ Takes the output of `scalardb-generate-config` (`scalardb/helm/custom-values.yam
 3. `scalardb/helm/custom-values.yaml` and `scalardb/secrets/create-scalardb-secrets.sh` must exist.
 4. Apply the shared context-mismatch convention (warn + ask when the marker's `k8s.context` differs from `kubectl config current-context`; never auto-switch).
 
-## Phase 1 — license key check
+## Phase 1 — license key / Secret check
 
-Check whether `SCALAR_DB_CLUSTER_LICENSE_KEY` is set in the environment (`[[ -n "${SCALAR_DB_CLUSTER_LICENSE_KEY:-}" ]]` — test only, never print the value).
+1. First check whether the Secret already exists (it may have been created out-of-band — path B below):
 
-If unset, stop with:
+   ```
+   kubectl -n <namespace> get secret scalardb-credentials
+   ```
 
-```
-Set your license key in the environment, then re-run this skill:
+   If it exists, say so and **skip Phase 2** (offer to re-run the secrets script only if the user says the key or credentials changed).
 
-  export SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>'
+2. Otherwise check whether `SCALAR_DB_CLUSTER_LICENSE_KEY` is set in the environment (`[[ -n "${SCALAR_DB_CLUSTER_LICENSE_KEY:-}" ]]` — test only, never print the value). If set, continue to Phase 2.
 
-(In Claude Code, type it as a `!` command so the value stays out of the
-conversation. Do NOT paste the key into the chat.)
-```
+3. If unset, stop and present the three supply paths below **verbatim in spirit** (adjust paths). Background you must convey correctly: every shell invocation in Claude Code — the assistant's tool calls *and* the user's `!` commands — starts fresh, so an `export` in one command does **not** carry into the next; and a `!` command line is recorded in the conversation transcript. Never tell the user "`export` via a `!` command, then re-run" — that does not work.
+
+   ```
+   SCALAR_DB_CLUSTER_LICENSE_KEY is not set and Secret scalardb-credentials
+   does not exist yet. Choose one way to supply the license key:
+
+   (A) recommended — restart Claude Code with the key in its environment:
+         export SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>'
+         claude
+       then re-run /scalardb-start-scalardb-cluster. Every step runs
+       unattended and the key never appears in the conversation.
+
+   (B) keep this session — in a separate terminal (same kubectl context):
+         export SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>'
+         bash <project>/scalardb/secrets/create-scalardb-secrets.sh
+       then re-run this skill; it will detect the Secret and continue.
+
+   (C) quickest, TRIAL KEYS ONLY — run the script inline as one `!` command:
+         ! SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>' bash scalardb/secrets/create-scalardb-secrets.sh
+       WARNING: the whole command line, including the key, is recorded in
+       the conversation. Do not do this with a production key.
+   ```
+
+   For paths B and C, first check the script for `<SET_ME>` credential defaults (see Phase 2) and tell the user to prepend the matching `STORAGES_<NAME>_USERNAME` / `STORAGES_<NAME>_PASSWORD` variables to the same command line.
+
+Never ask the user to paste the key into the chat as a plain message, and never echo it back.
 
 ## Phase 2 — create the Secret
+
+*(Skip if Phase 1 found the Secret already present.)*
 
 ```
 bash scalardb/secrets/create-scalardb-secrets.sh
@@ -87,6 +113,7 @@ On timeout or failure: show `kubectl -n <namespace> get pods`, `describe pod`, a
 |---|---|
 | license check error | wrong or missing license key, or license type does not match the bundled PEM (trial vs production) |
 | connection refused / unknown host to a storage | storage endpoint unreachable from the cluster (demo DBs stopped? wrong host?) |
+| `RSA public key is not available client side` (HikariPool init) | MySQL 8.x `caching_sha2_password` over non-TLS via the bundled MariaDB driver — append `?allowPublicKeyRetrieval=true` to that storage's `contact_points` JDBC URL in `scalardb/helm/custom-values.yaml`, then re-run this skill (`helm upgrade` picks it up) |
 | ImagePullBackOff | image tag or registry access problem |
 | CrashLoopBackOff right after start | property error in `scalardbClusterNodeProperties` — check the pod log's config parsing lines |
 
@@ -97,5 +124,5 @@ On timeout or failure: show `kubectl -n <namespace> get pods`, `describe pod`, a
   - ClusterIP → `kubectl -n <namespace> port-forward svc/<releaseName>-envoy 60053:60053`
   - LoadBalancer → `kubectl -n <namespace> get svc <releaseName>-envoy` → put the external IP into `scalardb/config/scalardb.properties` / `scalardb_sql.properties` (replace `<ENVOY_LOAD_BALANCER_IP>`)
 - Merge into the marker: `{ "cluster": { "status": "running", "releaseName": "...", "namespace": "...", "startedAt": "<ISO-8601>" } }`
-- Teardown for later: `helm uninstall <releaseName> -n <namespace>` (and note the Secret stays until deleted).
+- Teardown for later: `/scalardb-stop-scalardb-cluster` (uninstall-only or full cleanup, chosen there).
 - Next: `/scalardb-generate-schema-file` (create `schema.json` + `load-schema.sh`).

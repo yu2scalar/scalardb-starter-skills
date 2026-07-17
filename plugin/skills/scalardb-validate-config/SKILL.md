@@ -6,7 +6,7 @@ description: Read-only audit of an existing ScalarDB Cluster configuration - Hel
 # scalardb-validate-config
 
 > Status: **v0.1.0 (2026-07-14 — plan-006 P7 initial implementation)**
-> Targets ScalarDB Cluster **3.18.0**. Skill 7 of 8 in the scalardb-starter-skills walk-through.
+> Targets ScalarDB Cluster **3.18.0**. Skill 7 of 9 in the scalardb-starter-skills walk-through.
 
 ## Overview
 
@@ -53,6 +53,7 @@ Severity: **Error** = will fail at startup or cannot work as written; **Warning*
 | S11 | literal secrets in the file: `licensing.license_key`, storage `password` etc. carrying literal values instead of `${env:...}` references | Warning | secret hygiene (starter writes env refs + Secret) |
 | S12 | `licensing.license_key` / `license_check_cert_pem` (or `_path`) present (missing → node won't start) | Error | `ClusterNodeWithLicenseCheckerConfig.java:12-16` |
 | S13 | `cluster.membership.type` present (KUBERNETES for the Helm chart; the chart does not inject it) | Warning | chart 1.11.1 deployment template |
+| S14 | `jdbc:mysql:` URL without `allowPublicKeyRetrieval=true` and without TLS options (`sslMode=` / `useSSL=`) — fails at startup against MySQL 8.x default `caching_sha2_password` (`RSA public key is not available client side`) | Warning | MariaDB Connector/J `CachingSha2PasswordPlugin`; observed in starter E2E 2026-07-17 |
 
 ### Helm values (outside the properties block)
 

@@ -7,7 +7,7 @@ description: Generate a complete ScalarDB Cluster configuration through block-by
 
 > Status: **v0.1.0 (2026-07-14 — plan-006 P3 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0**, Helm chart **scalar-labs/scalardb-cluster 1.11.1** (appVersion 3.18.0).
-> Skill 3 of 8 in the scalardb-starter-skills walk-through.
+> Skill 3 of 9 in the scalardb-starter-skills walk-through.
 
 ## Overview
 
@@ -79,7 +79,9 @@ Apply the shared context-mismatch convention first (warn + ask if the marker rec
   | storage name | backend | `contact_points` | credentials |
   |---|---|---|---|
   | `postgres` | JDBC (PostgreSQL) | `jdbc:postgresql://postgres.scalardb-sample-db.svc.cluster.local:5432/scalardb` | scalaradmin / scalaradmin (demo constants, used as script defaults) |
-  | `mysql` | JDBC (MySQL) | `jdbc:mysql://mysql.scalardb-sample-db.svc.cluster.local:3306/` | scalaradmin / scalaradmin (demo constants, used as script defaults) |
+  | `mysql` | JDBC (MySQL) | `jdbc:mysql://mysql.scalardb-sample-db.svc.cluster.local:3306/?allowPublicKeyRetrieval=true` | scalaradmin / scalaradmin (demo constants, used as script defaults) |
+
+  The `?allowPublicKeyRetrieval=true` on the MySQL URL is required: MySQL 8.x defaults to `caching_sha2_password`, and ScalarDB connects through MariaDB Connector/J, which cannot complete that handshake over a non-TLS connection without it (`RSA public key is not available client side` at cluster startup otherwise).
 
 - **Not found / kubectl unavailable / declined** — continue with an empty storage list; Phase 5 collects the user's own databases.
 
@@ -96,7 +98,12 @@ Recommend based on the platform (marker `k8s.platform` if recorded, else current
 - ClusterIP → `indirect:localhost` + README instructions for `kubectl port-forward svc/scalardb-cluster-envoy 60053:60053 -n <namespace>`
 - LoadBalancer → `indirect:<ENVOY_LOAD_BALANCER_IP>` placeholder + README instructions to fill it from `kubectl get svc`
 
-> Chart 1.11.1 does not expose an Envoy replica count in its values — do not ask about it.
+```
+Q2.2. Envoy replicas? (default 1 — plenty for a starter walk-through;
+      the chart's own default is 3, sized for production HA)
+```
+
+Write the answer as `envoy.replicaCount` (the envoy dependency chart exposes it — `charts/envoy/values.yaml:6`, default 3; the parent chart's values.yaml simply doesn't list it).
 
 ## Phase 3 — ScalarDB Cluster block
 
@@ -159,6 +166,8 @@ Object storage backends (s3 / cloud-storage / blob-storage) are not offered by t
 | Db2 | `jdbc:db2://<host>:<port>/<dbname>` | 50000 | required |
 | SQL Server | `jdbc:sqlserver://<host>:<port>;databaseName=<dbname>` | 1433 | required |
 | YugabyteDB | `jdbc:yugabytedb://<host>:<port>/<dbname>` | 5433 | required |
+
+**MySQL 8.x auth note**: ScalarDB's JDBC backend uses MariaDB Connector/J. Against MySQL 8.x's default `caching_sha2_password` on a **non-TLS** connection it fails at startup with `RSA public key is not available client side` unless the URL ends with `?allowPublicKeyRetrieval=true`. Append it for the demo database (always) and for user MySQL databases unless the server enforces TLS (where it is unnecessary; note that `allowPublicKeyRetrieval` over plaintext is acceptable for demos but weakens credential secrecy on untrusted networks).
 
 Do not emit `contact_port` for JDBC (it is inside the URL). Credentials: env placeholders in the Secret script (`STORAGES_<NAME>_USERNAME` / `_PASSWORD`; demo databases get `scalaradmin` as the overridable default, user databases get `<SET_ME>`).
 
@@ -225,7 +234,7 @@ Render the templates (`templates/*.tmpl`, handlebars-style: `{{TOKEN}}`, `{{#if}
 └── README.md                            (create or append the "ScalarDB configuration" section)
 ```
 
-Key template tokens: `STORAGES[]` (`name`, `NAME_UPPER`, `backend_display`, `scalar_db_storage`, `contact_points`, `contact_port`, `emit_username`, `username_default`, `password_default`, `dynamo_endpoint_override`, `dynamo_namespace_prefix`, `cps_enabled`, `cps_filtering`, `cps_ordering`, `backend_is_jdbc`), `STORAGE_NAMES_CSV`, `NAMESPACE_MAPPING_CSV`, `FIRST_STORAGE`, `ENVOY_SERVICE_TYPE`, `REPLICA_COUNT`, `LOG_LEVEL`, `RESOURCES*`, `AUTH_ENABLED`, `AUTH_USERNAME`, `AUTH_PASSWORD`, `K8S_NAMESPACE`, `CLIENT_CONTACT_HOST`, `CLIENT_HOST_COMMENT`, `CHART_VERSION` (=1.11.1), `SCALARDB_VERSION` (=3.18.0).
+Key template tokens: `STORAGES[]` (`name`, `NAME_UPPER`, `backend_display`, `scalar_db_storage`, `contact_points`, `contact_port`, `emit_username`, `username_default`, `password_default`, `dynamo_endpoint_override`, `dynamo_namespace_prefix`, `cps_enabled`, `cps_filtering`, `cps_ordering`, `backend_is_jdbc`), `STORAGE_NAMES_CSV`, `NAMESPACE_MAPPING_CSV`, `FIRST_STORAGE`, `ENVOY_SERVICE_TYPE`, `ENVOY_REPLICA_COUNT`, `REPLICA_COUNT`, `LOG_LEVEL`, `RESOURCES*`, `AUTH_ENABLED`, `AUTH_USERNAME`, `AUTH_PASSWORD`, `K8S_NAMESPACE`, `CLIENT_CONTACT_HOST`, `CLIENT_HOST_COMMENT`, `CHART_VERSION` (=1.11.1), `SCALARDB_VERSION` (=3.18.0).
 
 Marker merge:
 
@@ -254,7 +263,8 @@ Show the generated file list and:
 ```
 Next: /scalardb-start-scalardb-cluster
   1. runs scalardb/secrets/create-scalardb-secrets.sh
-     (set SCALAR_DB_CLUSTER_LICENSE_KEY in your environment first)
+     (needs SCALAR_DB_CLUSTER_LICENSE_KEY — that skill walks you through
+      how to supply it without pasting it into the chat)
   2. helm install with scalardb/helm/custom-values.yaml
 ```
 
