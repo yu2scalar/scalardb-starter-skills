@@ -98,6 +98,8 @@ Recommend based on the platform (marker `k8s.platform` if recorded, else current
 - ClusterIP → `indirect:localhost` + README instructions for `kubectl port-forward svc/scalardb-cluster-envoy 60053:60053 -n <namespace>`
 - LoadBalancer → `indirect:<ENVOY_LOAD_BALANCER_IP>` placeholder + README instructions to fill it from `kubectl get svc`
 
+README must also cover the **different-machine case** (e.g. Windows host + Linux VM): `localhost` only works when the app runs on the port-forward host itself; otherwise the port-forward needs `--address <reachable IP>` and `contact_points` must carry that same IP — the bind address and `contact_points` must always match. On minikube, a LoadBalancer EXTERNAL-IP appears only while `minikube tunnel` is running.
+
 ```
 Q2.2. Envoy replicas? (default 1 — plenty for a starter walk-through;
       the chart's own default is 3, sized for production HA)
