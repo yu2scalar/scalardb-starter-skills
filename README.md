@@ -26,11 +26,24 @@ Skills land incrementally; the Status column tracks availability.
 ## Install
 
 ```bash
-# From Claude Code
-/plugin marketplace add /path/to/scalardb-starter-skills
+# At the Claude Code prompt
+/plugin marketplace add yu2scalar/scalardb-starter-skills
 /plugin install scalardb-starter-skills@scalardb-starter-skills
-/reload-plugins
+/reload-plugins                # or restart the session
 ```
+
+After reload, the skills above are available.
+
+## Uninstall
+
+```bash
+# At the Claude Code prompt
+/plugin uninstall scalardb-starter-skills@scalardb-starter-skills
+/plugin marketplace remove scalardb-starter-skills
+/reload-plugins                # or restart the session
+```
+
+Uninstalling the plugin does not touch any project directories the skills generated.
 
 ## Generated project layout
 
