@@ -44,32 +44,28 @@ Takes the output of `scalardb-generate-config` (`scalardb/helm/custom-values.yam
 
 2. Otherwise check whether `SCALAR_DB_CLUSTER_LICENSE_KEY` is set in the environment (`[[ -n "${SCALAR_DB_CLUSTER_LICENSE_KEY:-}" ]]` — test only, never print the value). If set, continue to Phase 2.
 
-3. If unset, stop and present the three supply paths below **verbatim in spirit** (adjust paths). Background you must convey correctly: every shell invocation in Claude Code — the assistant's tool calls *and* the user's `!` commands — starts fresh, so an `export` in one command does **not** carry into the next; and a `!` command line is recorded in the conversation transcript. Never tell the user "`export` via a `!` command, then re-run" — that does not work.
+3. If unset, stop and give the user the single supply path below. **First state why the key cannot simply be typed into the prompt**: anything that enters the conversation — a chat message or a `!` command line — is permanently recorded in the conversation transcript and tool logs, and an `export` typed as a `!` command doesn't survive either (every shell invocation in Claude Code, the assistant's tool calls and the user's `!` commands alike, starts fresh). The only route that keeps the key out of the record is giving it to the Claude Code **process** at launch:
 
    ```
-   SCALAR_DB_CLUSTER_LICENSE_KEY is not set and Secret scalardb-credentials
-   does not exist yet. Choose one way to supply the license key:
+   SCALAR_DB_CLUSTER_LICENSE_KEY is not set.
 
-   (A) recommended — restart Claude Code with the key in its environment:
-         export SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>'
-         claude
-       then re-run /scalardb-start-scalardb-cluster. Every step runs
-       unattended and the key never appears in the conversation.
+   The license key can't be accepted through this conversation: anything
+   typed here (including `!` commands) is recorded in the transcript, and
+   an exported variable would not survive to the next command anyway.
+   Instead, hand it to Claude Code itself at launch:
 
-   (B) keep this session — in a separate terminal (same kubectl context):
-         export SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>'
-         bash <project>/scalardb/secrets/create-scalardb-secrets.sh
-       then re-run this skill; it will detect the Secret and continue.
+     1. leave Claude Code:        /exit
+     2. in the same terminal:     export SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>'
+     3. restart Claude Code:      claude          (or: claude --continue)
+     4. re-run:                   /scalardb-start-scalardb-cluster
 
-   (C) quickest, TRIAL KEYS ONLY — run the script inline as one `!` command:
-         ! SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>' bash scalardb/secrets/create-scalardb-secrets.sh
-       WARNING: the whole command line, including the key, is recorded in
-       the conversation. Do not do this with a production key.
+   The variable lives in that terminal's shell, so it survives any number
+   of Claude Code restarts until you close the terminal.
    ```
 
-   For paths B and C, first check the script for `<SET_ME>` credential defaults (see Phase 2) and tell the user to prepend the matching `STORAGES_<NAME>_USERNAME` / `STORAGES_<NAME>_PASSWORD` variables to the same command line.
+   If the secrets script contains `<SET_ME>` credential defaults (see Phase 2), tell the user to also export the matching `STORAGES_<NAME>_USERNAME` / `STORAGES_<NAME>_PASSWORD` variables in step 2.
 
-Never ask the user to paste the key into the chat as a plain message, and never echo it back.
+Do not offer in-chat alternatives. If the user pastes the key into the conversation anyway, do not echo or use it — point out that it is now recorded in this conversation's history (for a production key, recommend rotating it) and guide them through the steps above.
 
 ## Phase 2 — create the Secret
 
