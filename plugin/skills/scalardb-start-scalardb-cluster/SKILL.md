@@ -116,9 +116,10 @@ On timeout or failure: show `kubectl -n <namespace> get pods`, `describe pod`, a
 ## Phase 5 — report
 
 - `kubectl -n <namespace> get pods,svc` summary.
-- Client access instructions matching `envoyServiceType`:
-  - ClusterIP → `kubectl -n <namespace> port-forward svc/<releaseName>-envoy 60053:60053`
-  - LoadBalancer → `kubectl -n <namespace> get svc <releaseName>-envoy` → put the external IP into `scalardb/config/scalardb.properties` / `scalardb_sql.properties` (replace `<ENVOY_LOAD_BALANCER_IP>`)
+- Client access instructions matching `envoyServiceType`. First ask where the client app will run — **on this host** (the machine kubectl/minikube runs on) or **on a different machine** (common with a Windows host + Linux VM: the app or browser sits outside the VM):
+  - **ClusterIP** — same host: `kubectl -n <namespace> port-forward svc/<releaseName>-envoy 60053:60053` and the generated `indirect:localhost` works as-is. Different machine: a default port-forward binds **127.0.0.1 only** — start it with `--address <IP reachable from the app>` (e.g. the VM's LAN IP) **and set `contact_points` in BOTH properties files to that same IP**. The bind address and `contact_points` must match; `ss -ltn | grep 60053` on the forwarding host shows what is actually listening.
+  - **LoadBalancer** — run `kubectl -n <namespace> get svc <releaseName>-envoy` and check EXTERNAL-IP. On minikube it stays `<pending>` forever unless `minikube tunnel` is running in a separate terminal — say this explicitly, and offer the ClusterIP/port-forward route above as the alternative if the user prefers not to run the tunnel. Once an IP exists, replace `<ENVOY_LOAD_BALANCER_IP>` in **both** `scalardb/config/scalardb.properties` and `scalardb_sql.properties`.
+  - **Completion gate**: before reporting done, `grep ENVOY_LOAD_BALANCER_IP scalardb/config/*.properties` — if the placeholder is still there, either fill it with the user's confirmed reachable IP or state plainly that client connectivity is still pending (never fill it with a guessed value such as `127.0.0.1`; a wrong-but-plausible address surfaces later as `UNAVAILABLE: io exception` in the app).
 - Merge into the marker: `{ "cluster": { "status": "running", "releaseName": "...", "namespace": "...", "startedAt": "<ISO-8601>" } }`
 - Teardown for later: `/scalardb-stop-scalardb-cluster` (uninstall-only or full cleanup, chosen there).
 - Next: `/scalardb-generate-schema-file` (create `schema.json` + `load-schema.sh`).
