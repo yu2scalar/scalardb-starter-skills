@@ -35,6 +35,18 @@ Skills land incrementally; the Status column tracks availability.
 
 After reload, the skills above are available.
 
+## Update
+
+`/reload-plugins` alone does **not** fetch new versions from GitHub — refresh the marketplace first:
+
+```bash
+# At the Claude Code prompt
+/plugin marketplace update scalardb-starter-skills   # fetch the latest from GitHub
+/reload-plugins                                      # apply it to the session
+```
+
+If the plugin still looks stale, uninstall and reinstall (see below). For hands-off updates, run `/plugin`, open the **Marketplaces** tab, and enable **auto-update** for this marketplace.
+
 ## Uninstall
 
 ```bash
