@@ -88,7 +88,16 @@ scalardb-starter-skills/
 ## Notes
 
 - The demo databases and fixed credentials are for evaluation only — never use them in production.
-- A valid ScalarDB Cluster license is required to start the cluster. The skills accept it at start time via an environment variable or prompt and store it only in a Kubernetes Secret.
+- A valid ScalarDB Cluster license is required to start the cluster. Supply it **only** through the `SCALAR_DB_CLUSTER_LICENSE_KEY` environment variable, exported in your terminal before you launch Claude Code — never type it into the conversation, as anything entered there (including `!` commands) is recorded in the transcript and tool logs. For example:
+
+  ```text
+  1. leave Claude Code:      /exit
+  2. in the same terminal:   export SCALAR_DB_CLUSTER_LICENSE_KEY='<your license key>'
+  3. restart Claude Code:    claude            # or: claude --continue  (resumes this session)
+  4. re-run the start skill: /scalardb-start-scalardb-cluster
+  ```
+
+  The exported variable stays in that terminal's shell, so you can restart Claude Code from it as many times as you like. `scalardb-start-scalardb-cluster` walks you through this and stores the key only in a Kubernetes Secret, never in a file.
 
 ## License
 
