@@ -5,7 +5,7 @@ description: Scaffold a Spring Boot 3.5 / Java 17 / Gradle project from a Scalar
 
 # scalardb-generate-springboot-starter
 
-> Status: **v0.2.0 (2026-07-17 — scenario endpoints for presets A/B; v0.1.0 2026-07-14 = plan-006 P6 initial implementation)**
+> Status: **v0.2.1 (2026-07-23 — plan-007: pre-run placeholder guard + DB-CLUSTER-30001 troubleshooting; v0.2.0 2026-07-17 = scenario endpoints for presets A/B; v0.1.0 2026-07-14 = plan-006 P6 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0**, Spring Boot **3.5.13**, Java **17**, Gradle (wrapper bundled).
 > Skill 6 of 9 in the scalardb-starter-skills walk-through.
 
@@ -140,11 +140,14 @@ Offer to run:
 ## Phase 4 — report
 
 - Generated tree summary + endpoint table.
+- **Pre-run guard**: `grep -n 'ENVOY_LOAD_BALANCER_IP' scalardb/config/*.properties`. If the placeholder is still there, do **not** tell the user to run yet — the app would start and fail on the first call. Point them to `/scalardb-start-scalardb-cluster` to resolve and confirm the reachable contact point first (it writes it into both properties files).
 - Run instructions:
   1. ensure the cluster is reachable (ClusterIP: `kubectl port-forward svc/<release>-envoy 60053:60053 -n <namespace>` from the marker; LoadBalancer: IP already in the properties),
   2. `./gradlew bootRun`,
   3. Swagger UI: `http://localhost:8080/swagger-ui/index.html`, plus one `curl` example per flavor — and, when scenario endpoints were generated, the scenario `curl` first (it is the walk-through's payoff).
-- Troubleshooting pointer for the first call: `UNAVAILABLE: io exception` from any endpoint means the app cannot reach the cluster — check `scalardb/config/scalardb.properties` `contact_points` (placeholder `<ENVOY_LOAD_BALANCER_IP>` still unreplaced? LoadBalancer IP pending because `minikube tunnel` is not running? `indirect:localhost` but the port-forward is not active on the machine running the app?).
+- Troubleshooting pointers for the first call (the app cannot reach the cluster):
+  - `DB-CLUSTER-30001: ... Cluster Node IP Address: <ENVOY_LOAD_BALANCER_IP>` — `contact_points` is still the **unreplaced placeholder**. Resolve it via `/scalardb-start-scalardb-cluster` (Phase 5) or set a reachable IP/hostname in **both** `scalardb/config/*.properties`, then restart the app.
+  - `UNAVAILABLE: io exception` from any endpoint — `contact_points` holds a value but it is not reachable from where the app runs: LoadBalancer IP pending because `minikube tunnel` is not running? `indirect:localhost` but the port-forward is not active (or bound to a different `--address`) on the machine running the app?
 - Marker merge: `{ "app": { "package": "...", "tables": [...], "scenario": "A" | "B" | null, "generatedAt": "<ISO-8601>" } }`
 - Next: `/scalardb-validate-config` to audit the configuration, `/scalardb-stop-sample-db` when finished with the demo databases.
 

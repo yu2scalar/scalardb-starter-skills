@@ -5,7 +5,7 @@ description: Read-only audit of an existing ScalarDB Cluster configuration - Hel
 
 # scalardb-validate-config
 
-> Status: **v0.1.0 (2026-07-14 — plan-006 P7 initial implementation)**
+> Status: **v0.2.1 (2026-07-23 — plan-007: add rule C5, unreplaced contact-point placeholder; v0.1.0 2026-07-14 = plan-006 P7 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0**. Skill 7 of 9 in the scalardb-starter-skills walk-through.
 
 ## Overview
@@ -71,6 +71,7 @@ Severity: **Error** = will fail at startup or cannot work as written; **Warning*
 | C2 | contact points carry a valid mode prefix (`indirect:` / `direct-kubernetes:`) and a non-empty target | Error | `ClusterClientConfig.java:68-111` |
 | C3 | auth cross-file: server `cluster.auth.enabled` vs each client's `cluster.auth.enabled` (+ username/password present when enabled) | Warning | reference `11-configuration-cluster.md` §2 |
 | C4 | Java and SQL clients point at the same host/port | Warning | cross-file consistency |
+| C5 | contact points still hold an **unreplaced placeholder** — `<ENVOY_LOAD_BALANCER_IP>` or any residual `<...>` token in `scalar.db.contact_points` / `scalar.db.sql.cluster_mode.contact_points` | Error | the app starts but the first call fails with `DB-CLUSTER-30001: Getting a cluster node object from the cache failed. Cluster Node IP Address: <ENVOY_LOAD_BALANCER_IP>`. Resolve via `scalardb-start-scalardb-cluster`'s contact-point flow, or set a reachable IP/hostname manually |
 
 ### Schema (schema.json)
 

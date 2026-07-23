@@ -5,7 +5,7 @@ description: Stop the ScalarDB Cluster started by scalardb-start-scalardb-cluste
 
 # scalardb-stop-scalardb-cluster
 
-> Status: **v0.1.0 (2026-07-17 — plan-006 A1 initial implementation)**
+> Status: **v0.2.1 (2026-07-23 — aligned to unified plugin versioning, no functional change; v0.1.0 2026-07-17 = plan-006 A1 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0** / Helm chart **scalar-labs/scalardb-cluster 1.11.1**.
 > Skill 8 of 9 in the scalardb-starter-skills walk-through.
 

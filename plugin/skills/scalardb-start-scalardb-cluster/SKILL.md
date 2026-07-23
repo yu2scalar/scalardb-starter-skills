@@ -5,7 +5,7 @@ description: Start ScalarDB Cluster on the current Kubernetes cluster using the 
 
 # scalardb-start-scalardb-cluster
 
-> Status: **v0.1.0 (2026-07-14 — plan-006 P4 initial implementation)**
+> Status: **v0.2.1 (2026-07-23 — plan-007: Phase 5 now investigates the live endpoint, confirms the reachable contact point with the user, and writes it into both properties files; v0.1.0 2026-07-14 = plan-006 P4 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0** / Helm chart **scalar-labs/scalardb-cluster 1.11.1**.
 > Skill 4 of 9 in the scalardb-starter-skills walk-through.
 
@@ -15,11 +15,12 @@ Takes the output of `scalardb-generate-config` (`scalardb/helm/custom-values.yam
 
 1. creates the `scalardb-credentials` Secret via the generated script (license key from the `SCALAR_DB_CLUSTER_LICENSE_KEY` environment variable),
 2. `helm upgrade --install` with the pinned chart version,
-3. waits until every Deployment in the release is rolled out (**verification = pods Ready**; deeper connectivity is exercised later by the Spring Boot starter).
+3. waits until every Deployment in the release is rolled out (**verification = pods Ready**),
+4. resolves the **client contact point** — investigates the live Envoy Service, proposes reachable candidates, confirms one with the user, and writes it into both client properties files (the actual gRPC/SQL round-trip is still exercised later by the Spring Boot starter).
 
 ### What this skill does NOT do
 
-- Generate or modify configuration (run `/scalardb-generate-config` first)
+- Generate configuration (run `/scalardb-generate-config` first). The only file edit this skill makes is filling the client `contact_points` host in Phase 5, after the user confirms the reachable value.
 - Ask for, store, or echo the license key value — it must arrive via the environment
 - Load schemas (that is `scalardb-generate-schema-file`'s `load-schema.sh`)
 - gRPC/SQL connectivity tests beyond pod readiness
@@ -113,13 +114,63 @@ On timeout or failure: show `kubectl -n <namespace> get pods`, `describe pod`, a
 | ImagePullBackOff | image tag or registry access problem |
 | CrashLoopBackOff right after start | property error in `scalardbClusterNodeProperties` — check the pod log's config parsing lines |
 
-## Phase 5 — report
+## Phase 5 — report and resolve the client contact point
 
-- `kubectl -n <namespace> get pods,svc` summary.
-- Client access instructions matching `envoyServiceType`. First ask where the client app will run — **on this host** (the machine kubectl/minikube runs on) or **on a different machine** (common with a Windows host + Linux VM: the app or browser sits outside the VM):
-  - **ClusterIP** — same host: `kubectl -n <namespace> port-forward svc/<releaseName>-envoy 60053:60053` and the generated `indirect:localhost` works as-is. Different machine: a default port-forward binds **127.0.0.1 only** — start it with `--address <IP reachable from the app>` (e.g. the VM's LAN IP) **and set `contact_points` in BOTH properties files to that same IP**. The bind address and `contact_points` must match; `ss -ltn | grep 60053` on the forwarding host shows what is actually listening.
-  - **LoadBalancer** — run `kubectl -n <namespace> get svc <releaseName>-envoy` and check EXTERNAL-IP. On minikube it stays `<pending>` forever unless `minikube tunnel` is running in a separate terminal — say this explicitly, and offer the ClusterIP/port-forward route above as the alternative if the user prefers not to run the tunnel. Once an IP exists, replace `<ENVOY_LOAD_BALANCER_IP>` in **both** `scalardb/config/scalardb.properties` and `scalardb_sql.properties`.
-  - **Completion gate**: before reporting done, `grep ENVOY_LOAD_BALANCER_IP scalardb/config/*.properties` — if the placeholder is still there, either fill it with the user's confirmed reachable IP or state plainly that client connectivity is still pending (never fill it with a guessed value such as `127.0.0.1`; a wrong-but-plausible address surfaces later as `UNAVAILABLE: io exception` in the app).
-- Merge into the marker: `{ "cluster": { "status": "running", "releaseName": "...", "namespace": "...", "startedAt": "<ISO-8601>" } }`
+Pods are Ready, but the generated client properties still carry a **placeholder** contact point (`indirect:<ENVOY_LOAD_BALANCER_IP>` for LoadBalancer, or `indirect:localhost` for ClusterIP) that has to be turned into an address the **application process can actually reach**. Leaving it unresolved is the classic foot-gun: the app starts fine and fails on the first call with `DB-CLUSTER-30001: Getting a cluster node object from the cache failed. Cluster Node IP Address: <ENVOY_LOAD_BALANCER_IP>`. This phase investigates the live endpoint, proposes candidates with reachability, **asks the user to confirm**, and writes the confirmed value into **both** properties files.
+
+Start with a `kubectl -n <namespace> get pods,svc` summary, then run the sub-flow below. Variables: `<ns>` = marker `config.k8sNamespace`, `<release>` = `config.releaseName`, `envoyServiceType` = `config.envoyServiceType`.
+
+### 5a — investigate the endpoint (read-only; only display values)
+
+Run what is available; each command is **best-effort** — if a tool is missing, say "skipped (tool not present)" and move on. Never write anything here.
+
+- `kubectl -n <ns> get svc <release>-envoy -o wide` — TYPE / CLUSTER-IP / EXTERNAL-IP / PORT.
+- EXTERNAL-IP or hostname: `kubectl -n <ns> get svc <release>-envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}'` (empty → pending). **EKS commonly returns a hostname (the ELB DNS name), not an IP** — either is fine as `indirect:<value>`.
+- minikube only: `minikube status` and `pgrep -af "minikube tunnel"` (note the `--bind-address` if shown).
+- Actual listener on this host: `ss -ltn | grep 60053` (is it `0.0.0.0:60053` or `127.0.0.1:60053`?).
+- Reachable host IPs of this machine: `ip -4 -o addr show scope global`.
+- Per-candidate reachability: `timeout 3 bash -c '</dev/tcp/<candidate>/60053' && echo OPEN || echo NG`.
+
+### 5b — decide candidates (present only; the user confirms)
+
+| condition | candidate to propose | note |
+|---|---|---|
+| **LoadBalancer / cloud (AKS/EKS/GKE)** | the Service **EXTERNAL-IP or hostname, as-is** | On a cloud LB the value shown by `kubectl get svc` is the reachable target (subject to security-group/firewall rules) — propose it directly; no loopback probing needed. EKS → hostname; GKE/AKS → usually an IP. If `<pending>`, explain the LB is still provisioning and re-run once it is assigned. |
+| **LoadBalancer / minikube + tunnel running (bind 0.0.0.0)** | `localhost` (same host) / this machine's LAN IP (different machine) | minikube quirk: `get svc` may show `127.0.0.1`, but a different machine must use the VM's LAN IP even though the Service says loopback. Back the proposal with the `ss` listener and the reachability test. |
+| **LoadBalancer / minikube + tunnel NOT running** | (no candidate) | Tell the user to run `minikube tunnel` in a separate terminal, then re-run this skill. Do not write anything. |
+| **ClusterIP** | `localhost` (same host + port-forward) / the `--address <IP>` value (different machine) | `kubectl -n <ns> port-forward [--address <reachable IP>] svc/<release>-envoy 60053:60053`. The port-forward bind address and `contact_points` must be the **same** value. |
+
+The reachability probes (`ss` / `ip` / `/dev/tcp`) exist mainly to disambiguate the **minikube `127.0.0.1`** case and **different-machine** setups. For a cloud LoadBalancer, prefer the EXTERNAL-IP/hostname straight from `get svc`.
+
+### 5c — confirm with the user (always required)
+
+Ask **where the application runs** — on this host (the machine kubectl/minikube runs on) or on a different machine (common with a Windows host + Linux VM). Show the 5b candidates with their reachability results and have the user pick the value to write. If no candidate is reachable, or the topology is special (NAT, etc.), ask the user to type the IP/hostname the app can reach.
+
+**Never auto-write a guessed value** (a plausible-but-wrong address such as `127.0.0.1` resurfaces later as `UNAVAILABLE: io exception`). If the user defers, stop and warn plainly that the contact point is still unset and the first app call will fail with `DB-CLUSTER-30001` until it is filled — this is the completion gate.
+
+### 5d — apply (both files, host part only)
+
+Once the user confirms a value, replace the host in **both** files, keeping the `indirect:` prefix and the separate `contact_port=60053` line intact:
+
+- `scalardb/config/scalardb.properties` → `scalar.db.contact_points=indirect:<confirmed>`
+- `scalardb/config/scalardb_sql.properties` → `scalar.db.sql.cluster_mode.contact_points=indirect:<confirmed>`
+
+Then **verify no placeholder remains**: `grep -n 'ENVOY_LOAD_BALANCER_IP' scalardb/config/*.properties` must return nothing. Report the result. State that **the app must be (re)started** for the change to take effect (properties are read only at startup).
+
+### 5e — idempotency
+
+On re-run: if `contact_points` already holds a real value (no `<...>` placeholder), display the current value and ask whether to change it — do not overwrite silently. If a placeholder is still present, always enter 5a–5d.
+
+### 5f — finish
+
+- Merge into the marker (contact-point fields mirror `scalar.db.contact_points`):
+  ```json
+  { "cluster": {
+      "status": "running", "releaseName": "...", "namespace": "...", "startedAt": "<ISO-8601>",
+      "contactPoints": "indirect:<confirmed>",
+      "contactPointsResolvedAt": "<ISO-8601>",
+      "contactPointsVerifiedBy": "user-confirmed; 60053 reachable at <candidate>" } }
+  ```
+  If the contact point is still pending (5c deferred / tunnel not running), write `status: "running"` but omit the `contactPoints*` fields and say connectivity is unresolved.
 - Teardown for later: `/scalardb-stop-scalardb-cluster` (uninstall-only or full cleanup, chosen there).
 - Next: `/scalardb-generate-schema-file` (create `schema.json` + `load-schema.sh`).

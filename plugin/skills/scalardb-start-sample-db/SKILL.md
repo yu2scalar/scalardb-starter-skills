@@ -5,7 +5,7 @@ description: Start demo PostgreSQL and MySQL databases inside the current Kubern
 
 # scalardb-start-sample-db
 
-> Status: **v0.1.0 (2026-07-14 — plan-006 P2 initial implementation)**
+> Status: **v0.2.1 (2026-07-23 — aligned to unified plugin versioning, no functional change; v0.1.0 2026-07-14 = plan-006 P2 initial implementation)**
 > Targets ScalarDB 3.18.0. Skill 2 of 9 in the scalardb-starter-skills walk-through.
 
 ## Overview
