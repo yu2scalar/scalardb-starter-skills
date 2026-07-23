@@ -5,7 +5,7 @@ description: Generate a ScalarDB schema file (schema.json) from a preset - Order
 
 # scalardb-generate-schema-file
 
-> Status: **v0.1.0 (2026-07-14 — plan-006 P5 initial implementation)**
+> Status: **v0.2.1 (2026-07-23 — aligned to unified plugin versioning, no functional change; v0.1.0 2026-07-14 = plan-006 P5 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0** (loader image `ghcr.io/scalar-labs/scalardb-cluster-schema-loader:3.18.0`).
 > Skill 5 of 9 in the scalardb-starter-skills walk-through.
 

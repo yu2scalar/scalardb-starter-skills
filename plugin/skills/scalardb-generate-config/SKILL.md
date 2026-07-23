@@ -5,7 +5,7 @@ description: Generate a complete ScalarDB Cluster configuration through block-by
 
 # scalardb-generate-config
 
-> Status: **v0.1.0 (2026-07-14 — plan-006 P3 initial implementation)**
+> Status: **v0.2.1 (2026-07-23 — plan-007: contact_points marked provisional, finalized by scalardb-start-scalardb-cluster; README + comment guidance; v0.1.0 2026-07-14 = plan-006 P3 initial implementation)**
 > Targets ScalarDB Cluster **3.18.0**, Helm chart **scalar-labs/scalardb-cluster 1.11.1** (appVersion 3.18.0).
 > Skill 3 of 9 in the scalardb-starter-skills walk-through.
 
@@ -93,10 +93,12 @@ Q2. How should the Envoy endpoint be exposed? (service type)
     2) LoadBalancer — cloud load balancer (recommended for AKS / EKS / GKE)
 ```
 
-Recommend based on the platform (marker `k8s.platform` if recorded, else current-context heuristics). The choice also determines the client `contact_points` host in Phase 7:
+Recommend based on the platform (marker `k8s.platform` if recorded, else current-context heuristics). The choice sets the **provisional** client `contact_points` host in Phase 7 — the real cluster does not exist yet, so the final reachable value is confirmed later by `scalardb-start-scalardb-cluster` (Phase 5), which investigates the live endpoint and writes the user-confirmed value into both properties files:
 
 - ClusterIP → `indirect:localhost` + README instructions for `kubectl port-forward svc/scalardb-cluster-envoy 60053:60053 -n <namespace>`
 - LoadBalancer → `indirect:<ENVOY_LOAD_BALANCER_IP>` placeholder + README instructions to fill it from `kubectl get svc`
+
+Both are placeholders to be finalized after the cluster is up. `CLIENT_HOST_COMMENT` (rendered into both properties files) must say so explicitly — e.g. *"Provisional. `scalardb-start-scalardb-cluster` investigates the live Envoy endpoint and, after your confirmation, replaces this host with a value the application can actually reach. Do not start the app while `<ENVOY_LOAD_BALANCER_IP>` is still here — it fails on the first call with DB-CLUSTER-30001."*
 
 README must also cover the **different-machine case** (e.g. Windows host + Linux VM): `localhost` only works when the app runs on the port-forward host itself; otherwise the port-forward needs `--address <reachable IP>` and `contact_points` must carry that same IP — the bind address and `contact_points` must always match. On minikube, a LoadBalancer EXTERNAL-IP appears only while `minikube tunnel` is running.
 
@@ -256,7 +258,7 @@ Marker merge:
 }
 ```
 
-README section must include: the fixed-values table with edit pointers (file + key), the storage/namespace summary, the port-forward or LoadBalancer instructions matching Q2, the Aurora/RDS permissions note (JDBC storages only), the demo-DB warning (when adopted), and the auth password-change note (when enabled).
+README section must include: the fixed-values table with edit pointers (file + key), the storage/namespace summary, the port-forward or LoadBalancer instructions matching Q2, the Aurora/RDS permissions note (JDBC storages only), the demo-DB warning (when adopted), the auth password-change note (when enabled), and a **contact-point note**: the `contact_points` host is provisional until `scalardb-start-scalardb-cluster` finalizes it; starting the app with `<ENVOY_LOAD_BALANCER_IP>` still in place fails on the first call with `DB-CLUSTER-30001`; on minikube a LoadBalancer EXTERNAL-IP only appears while `minikube tunnel` runs.
 
 ## Phase 8 — report and hand-off
 
