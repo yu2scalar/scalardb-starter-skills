@@ -1,0 +1,24 @@
+{
+  "account.accounts": {
+    "transaction": true,
+    "partition-key": ["account_id"],
+    "columns": {
+      "account_id": "TEXT",
+      "owner_name": "TEXT",
+      "balance": "INT",
+      "updated_at": "BIGINT"
+    }
+  },
+  "audit.transfer_history": {
+    "transaction": true,
+    "partition-key": ["account_id"],
+    "clustering-key": ["created_at DESC"],
+    "columns": {
+      "account_id": "TEXT",
+      "created_at": "BIGINT",
+      "transfer_id": "TEXT",
+      "counterpart_account_id": "TEXT",
+      "amount": "INT"
+    }
+  }
+}
