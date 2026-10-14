@@ -53,3 +53,4 @@ closer to the source (e.g. repository not-found) is preserved:
 | 9500 | anything else |
 | 9600 | `AuthenticationException` / `AuthorizationException` (SQL API only) |
 | 9700 | not-found (thrown by repositories as `CustomException`) → HTTP 404 |
+| 9800 | scenario business abort (preset scenario endpoints only; `ScenarioException`, transaction aborted, never retried) → HTTP 409 — see SKILL.md Phase 2.5 |
