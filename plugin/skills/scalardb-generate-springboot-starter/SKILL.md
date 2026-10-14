@@ -5,7 +5,7 @@ description: Scaffold a Spring Boot 4.1 / Java 17 / Gradle project from a Scalar
 
 # scalardb-generate-springboot-starter
 
-> Status: **3.19.1.0 (2026-10-14 — versions now follow ScalarDB as `<ScalarDB version>.<skill revision>`; Spring Boot 4.1.0 → 4.1.1 so the BOM's protobuf-java (4.35.1) / gRPC (1.83.1) meet ScalarDB 3.19.1's requirements without overrides; retargeted to ScalarDB 3.19.1 / Helm chart 1.12.1, bundled references rebuilt from the 3.19.1 reference without internal source citations; `UnknownTransactionStatusException` is no longer rolled back — reported with its transaction ID as 9200; 9700 not-found → HTTP 404; orphan `executeSQL` (missing `SqlCommandDto`) dropped from the SQL service patterns; v0.3.0 2026-08-05 = Spring Boot 4.1 + selectable retry style (Framework built-in default / Spring Retry library) + official-style retry policy + unified error codes incl. 9700 not-found; v0.2.1 2026-07-23 = placeholder guard; v0.2.0 2026-07-17 = scenario endpoints; v0.1.0 2026-07-14 = initial)**
+> Status: **3.19.1.1 (2026-10-14 — scenario error contract fixed: business abort = HTTP 409 / errorCode 9800 with `<REASON>: …` message and a details map, invalid request = HTTP 400 / errorCode 9400 `INVALID_REQUEST: …`); 3.19.1.0 (2026-10-14 — versions now follow ScalarDB as `<ScalarDB version>.<skill revision>`; Spring Boot 4.1.0 → 4.1.1 so the BOM's protobuf-java (4.35.1) / gRPC (1.83.1) meet ScalarDB 3.19.1's requirements without overrides; retargeted to ScalarDB 3.19.1 / Helm chart 1.12.1, bundled references rebuilt from the 3.19.1 reference without internal source citations; `UnknownTransactionStatusException` is no longer rolled back — reported with its transaction ID as 9200; 9700 not-found → HTTP 404; orphan `executeSQL` (missing `SqlCommandDto`) dropped from the SQL service patterns; v0.3.0 2026-08-05 = Spring Boot 4.1 + selectable retry style (Framework built-in default / Spring Retry library) + official-style retry policy + unified error codes incl. 9700 not-found; v0.2.1 2026-07-23 = placeholder guard; v0.2.0 2026-07-17 = scenario endpoints; v0.1.0 2026-07-14 = initial)**
 > Targets ScalarDB Cluster **3.19.1**, Spring Boot **4.1.1**, Java **17**, Gradle **9.5.1** (wrapper bundled).
 > Skill 6 of 9 in the scalardb-starter-skills walk-through.
 
@@ -114,14 +114,25 @@ Key path variables appear in key-declaration order: partition keys first, then c
 
 **Detection**: the marker's `schema.preset` (written by `scalardb-generate-schema-file`) is `"A"` or `"B"`, **or** the parsed schema structurally contains the preset's tables with the columns the scenario touches (A: `order.orders`, `order.order_items`, `inventory.items` with `stock` + `unit_price`; B: `account.accounts` with `balance`, `audit.transfer_history`). No match → skip this phase.
 
-Generate both flavors with the same transaction/retry/rollback structure as Phase 2 services (the Q4 retry style's RetryTemplate, rollback on failure except on `UnknownTransactionStatusException` — no rollback, report the transaction ID as 9200 — and `determineErrorCode`); business aborts call `transaction.abort()` / `ROLLBACK` and map to **HTTP 409** with a scenario error code in the `ApiResponse` wrapper. Shared DTOs live in `dto/`; scenario services/controllers are separate classes so the CRUD ones stay untouched.
+Generate both flavors with the same transaction/retry/rollback structure as Phase 2 services (the Q4 retry style's RetryTemplate, rollback on failure except on `UnknownTransactionStatusException` — no rollback, report the transaction ID as 9200 — and `determineErrorCode`); business aborts call `transaction.abort()` / `ROLLBACK` and map to **HTTP 409** in the `ApiResponse` wrapper. Shared DTOs live in `dto/`; scenario services/controllers are separate classes so the CRUD ones stay untouched.
+
+**Error contract (both presets, both flavors — use exactly these values):**
+
+| case | HTTP | `errorCode` | `message` | `data` |
+|---|---|---|---|---|
+| business abort (the transaction is aborted / rolled back) | 409 | **9800** | `<REASON>: <human-readable detail>` | details map: `error` = `<REASON>` plus the fields listed per preset below |
+| invalid request (checked **before** any transaction starts) | 400 | **9400** | `INVALID_REQUEST: <what is wrong>` | `null` |
+| anything else | as in Phase 2 services (`determineErrorCode`: 9100–9700) | | | |
+
+- Throw a dedicated `exception/ScenarioException` (carrying `<REASON>` and the details map) for business aborts and handle it in the scenario controllers with `@ExceptionHandler`. It is **not** a `TransactionException` / `SqlException`, so it is never retried.
+- The README section below shows the 409 / `9800` response; if the generated README lists error codes elsewhere, add `9800` there too.
 
 ### Preset A — place order
 
 - Classes: `dto/PlaceOrderRequest` / `dto/PlaceOrderResponse`, `service/OrderScenarioService` (Java API), `service/OrderScenarioSqlService` (SQL API), `controller/OrderScenarioController` (`@RequestMapping("/orders")`, `@PostMapping("/place")`), `controller/OrderScenarioSqlController` (`/orders-sql/place`).
-- Request: `{ "customerId": "c1", "items": [ { "itemId": "i1", "quantity": 2 } ] }` — validate: `items` non-empty, `quantity >= 1`, no duplicate `itemId` (else HTTP 400 before any transaction).
+- Request: `{ "customerId": "c1", "items": [ { "itemId": "i1", "quantity": 2 } ] }` — validate: `items` non-empty, every `itemId` present, `quantity >= 1`, no duplicate `itemId` (else 400 / 9400 `INVALID_REQUEST` before any transaction).
 - In **one transaction**:
-  1. For each item: Get `inventory.items[item_id]`. Missing → abort, 409 `ITEM_NOT_FOUND` (include `itemId`). `stock < quantity` → abort, 409 `INSUFFICIENT_STOCK` (include `itemId`, `stock`, `requested`).
+  1. For each item: Get `inventory.items[item_id]`. Missing → abort, 409 / 9800 `ITEM_NOT_FOUND` (`data`: `error`, `itemId`). `stock < quantity` → abort, 409 / 9800 `INSUFFICIENT_STOCK` (`data`: `error`, `itemId`, `stock`, `requested`).
   2. `order_id` = random UUID, `created_at` = epoch millis, `total_amount` = Σ `quantity × items.unit_price` (price read in this transaction — the price at purchase time).
   3. Insert `order.orders` (`status` = `"PLACED"`); insert one `order.order_items` row per item (`unit_price` copied from `inventory.items`).
   4. Update each `inventory.items.stock` to `stock − quantity`.
@@ -131,9 +142,9 @@ Generate both flavors with the same transaction/retry/rollback structure as Phas
 ### Preset B — transfer
 
 - Classes: `dto/TransferRequest` / `dto/TransferResponse`, `service/AccountScenarioService` / `AccountScenarioSqlService`, `controller/AccountScenarioController` (`/accounts/transfer`), `controller/AccountScenarioSqlController` (`/accounts-sql/transfer`).
-- Request: `{ "fromAccountId": "a1", "toAccountId": "a2", "amount": 100 }` — validate: `amount >= 1`, `fromAccountId != toAccountId` (else HTTP 400).
+- Request: `{ "fromAccountId": "a1", "toAccountId": "a2", "amount": 100 }` — validate: both account IDs present, `amount >= 1`, `fromAccountId != toAccountId` (else 400 / 9400 `INVALID_REQUEST` before any transaction).
 - In **one transaction**:
-  1. Get both `account.accounts` rows. Missing → abort, 409 `ACCOUNT_NOT_FOUND` (say which). `from.balance < amount` → abort, 409 `INSUFFICIENT_BALANCE` (include `balance`, `requested`).
+  1. Get both `account.accounts` rows. Missing → abort, 409 / 9800 `ACCOUNT_NOT_FOUND` (`data`: `error`, `accountId` = the missing one). `from.balance < amount` → abort, 409 / 9800 `INSUFFICIENT_BALANCE` (`data`: `error`, `accountId` = from, `balance`, `requested`).
   2. `transfer_id` = random UUID, `created_at` = epoch millis. Update both balances (`from −amount`, `to +amount`) and `updated_at`.
   3. Insert **two** `audit.transfer_history` rows — one per side, same `transfer_id`: partition key = that side's `account_id`, `counterpart_account_id` = the other side, `amount` = `−amount` on the from side / `+amount` on the to side (so `GET /transfer-history/scan-by-pk/{account_id}` shows each account's history newest-first via the DESC clustering key).
   4. Commit.
@@ -141,7 +152,7 @@ Generate both flavors with the same transaction/retry/rollback structure as Phas
 
 ### README section (append to the project README.md)
 
-Append **"Try a cross-database ACID transaction"**: which namespaces sit on which storage (from the marker — with the demo split this really is PostgreSQL + MySQL in one transaction), a success `curl` for the scenario endpoint, a deliberate-failure `curl` (insufficient stock/balance) plus follow-up GETs showing **nothing was partially written**, and one sentence on why that atomicity across two databases is ScalarDB's point.
+Append **"Try a cross-database ACID transaction"**: which namespaces sit on which storage (from the marker — with the demo split this really is PostgreSQL + MySQL in one transaction), a success `curl` for the scenario endpoint, a deliberate-failure `curl` (insufficient stock/balance — show the 409 / `errorCode` 9800 response) plus follow-up GETs showing **nothing was partially written**, and one sentence on why that atomicity across two databases is ScalarDB's point.
 
 ## Phase 3 — compile check
 
