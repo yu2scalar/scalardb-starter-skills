@@ -138,6 +138,7 @@ handling can cause "anomalies or data inconsistency" (`docs/api-guide.mdx:1983-1
 | `CommitConflictException` | `commit()` | Transient fault, e.g. conflict | Yes (example) | **Yes, from the beginning** (`docs/api-guide.mdx:2020`) |
 | `CommitException` | `commit()` | Transient or non-transient | Yes (example) | Yes from the beginning, with a retry limit (`docs/api-guide.mdx:2019`) |
 | `UnknownTransactionStatusException` | `commit()` | Whether the commit succeeded is unknown | **No** (the example neither rolls back nor retries) | **No — first find out whether it committed; retry only if it failed.** Identifying the status is the user's job (e.g. an application status table updated in the same transaction) (`docs/api-guide.mdx:2021-2023,2093-2098`) |
+| Authentication / authorization failure (ScalarDB Cluster with auth enabled) — **not a separate class**: the operation's usual `TransactionException` subclass with `isAuthenticationError()` / `isAuthorizationError()` returning `true` (`isSuperuserRequired()`, `getRequiredPrivilege()` give details) | any operation (Cluster client; the per-operation class is listed under "Cluster client: gRPC error → exception" below) | The current user is not authenticated / lacks the required privilege (`docs/scalardb-cluster/api-guide.mdx:2751-2762`) | Yes, like any other failure | **Official docs: not specified** — the official example puts them in the generic retry loop with the other exceptions (`docs/scalardb-cluster/api-guide.mdx:2764-2772`). **Recommendation (not official): do not retry** — the failure is non-transient, so retrying cannot change the result; it only wastes attempts and adds noise. This matches the Spring Data guide's classification of "authentication error and permission error" as non-transient (`docs/scalardb-sql/spring-data-guide.mdx:615-616`). Detect by the flags, not by class |
 | `RollbackException` / `AbortException` | `rollback()` / `abort()` | Rolling back failed (transient or non-transient) | — | **No action needed: "the transaction should eventually recover"; just log it** (`docs/api-guide.mdx:2025-2029`) |
 
 The official example's structure (`docs/api-guide.mdx:2045-2120`), which a reviewer can compare code against:
@@ -179,7 +180,7 @@ Official docs: `docs/scalardb-sql/sql-api-guide.mdx` "Execute transactions" and 
 | `TransactionConflictException` | `TransactionRetryableException` | A transaction conflict | Yes | Yes, from the beginning |
 | `TransactionNotFoundException` | `TransactionRetryableException` | The transaction for the given ID was not found | Yes | Yes, from the beginning |
 | `UnknownTransactionStatusException` | `SqlException` | Commit status unknown | Not in the example (see the caution below) | **No — check whether it committed; retry only if it failed** (`docs/scalardb-sql/sql-api-guide.mdx:338-342,355-358`) |
-| `AuthenticationException` / `AuthorizationException` | `SqlException` | Authentication / authorization failure (raised from Core errors flagged as auth errors) | Yes (falls into the `SqlException` branch) | Retrying does not help |
+| `AuthenticationException` / `AuthorizationException` | `SqlException` | Authentication / authorization failure. The SQL layer converts the Core / Cluster auth flags into these classes | Yes (falls into the `SqlException` branch) | **Official docs: not specified** — the official example treats them as a generic `SqlException` (retry with a limit, `docs/scalardb-sql/sql-api-guide.mdx:343-352`). **Recommendation (not official): do not retry** — non-transient (`docs/scalardb-sql/spring-data-guide.mdx:615-616`), so retrying cannot change the result |
 | `SqlException` (other) | `RuntimeException` | Transient or non-transient | **Yes** (example) | Yes, but **limit the number of retries and give up** (`docs/scalardb-sql/sql-api-guide.mdx:343-352,360-363`) |
 
 - Official example (Transaction mode and 2PC mode are handled the same way, `docs/scalardb-sql/sql-api-guide.mdx:328-353,398-431`):
@@ -189,6 +190,9 @@ Official docs: `docs/scalardb-sql/sql-api-guide.mdx` "Execute transactions" and 
   → `TransactionConflictException`; Core `UnknownTransactionStatusException` → SQL `UnknownTransactionStatusException`;
   other `CommitException` → `SqlException` (or the auth subclasses); `TransactionNotFoundException` on join/resume → SQL
   `TransactionNotFoundException`.
+- **Close the `SqlSession` when done**, as the official guide says (`docs/scalardb-sql/sql-api-guide.mdx:81-87`).
+  `SqlSession.close()` only marks the session closed and releases nothing, so forgetting it leaks nothing today; any later
+  operation on a closed session throws `IllegalStateException`.
 - **There is no SQL counterpart of `UnsatisfiedConditionException`.** SQL `UPDATE` / `DELETE` with a primary-key
   `WHERE` run as Core `update`/`delete` with `updateIfExists` / `deleteIfExists`, and an unmet condition is swallowed:
   the statement succeeds with **update count 0**. Code that
@@ -229,9 +233,15 @@ paths follow the same pattern):
 | `TRANSACTION_NOT_FOUND`, `HOP_LIMIT_EXCEEDED` | `TransactionNotFoundException` |
 | `TRANSACTION_CONFLICT` | `CrudConflictException` |
 | `UNSATISFIED_CONDITION` | `UnsatisfiedConditionException` |
-| `AUTHENTICATION_ERROR` / `AUTHORIZATION_ERROR` | `CrudException` with `isAuthenticationError()` / `isAuthorizationError()` set |
+| `AUTHENTICATION_ERROR` / `AUTHORIZATION_ERROR` | `CrudException` with `isAuthenticationError()` / `isAuthorizationError()` set (CRUD path; see the per-operation list below) |
 | `UNKNOWN_TRANSACTION_STATUS` | `UnknownTransactionStatusException` |
 | gRPC transport errors (`GRPC_*`, `INVALID_GRPC_PROTOBUF`) | `CrudException`, or `UnknownTransactionStatusException` during piggyback commit |
+
+Authentication / authorization failures keep the class of the operation that failed and only set a flag (Cluster client):
+`begin` → `TransactionException`, authentication only; CRUD → `CrudException`, authentication, or authorization with the
+required privilege; `commit` → `CommitException`, authentication only; `rollback` → `RollbackException`, authentication only.
+A policy that retries `TransactionException` therefore retries them too, and they can be told apart only by the flags (check
+the whole cause chain when the exception is wrapped). See the Java table above for the retry recommendation and `70` AP-29.
 
 ### Pitfalls
 
