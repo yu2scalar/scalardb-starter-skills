@@ -601,6 +601,37 @@ shape".
   leaks. Generated Service-layer code must include the rollback path.
 - Sources: `10 §1`, `30 §5.1`.
 
+### AP-29. Retrying ScalarDB Cluster authentication / authorization failures in the Java API
+
+- **Symptom**: a retry loop or retry policy that retries every `TransactionException` (or every `CrudException` /
+  `CommitException`) also retries failures caused by a missing login or a missing privilege.
+- **Why it is wrong**: with the Cluster client these failures are not a separate class. They keep the class of the failed
+  operation (`TransactionException` from `begin`, `CrudException` from CRUD, `CommitException` from `commit`,
+  `RollbackException` from `rollback`) and only set `isAuthenticationError()` / `isAuthorizationError()`
+  (`docs/scalardb-cluster/api-guide.mdx:2751-2762`). A class-based retry policy cannot exclude them. The failure is
+  non-transient, so every retry fails the same way: the cost is wasted attempts, delay and log noise, **not** a correctness or
+  data problem. The official docs do not say whether to retry them (the official example retries all non-unknown exceptions,
+  `docs/scalardb-cluster/api-guide.mdx:2764-2772`); not retrying is a recommendation of this reference, consistent with the
+  Spring Data guide's non-transient classification of "authentication error and permission error"
+  (`docs/scalardb-sql/spring-data-guide.mdx:615-616`).
+- **Correct alternative**: before retrying, check `isAuthenticationError()` / `isAuthorizationError()` on the exception and its
+  cause chain; if set, roll back and stop (report the missing login or privilege; `getRequiredPrivilege()` names it). In the SQL
+  API the same failures arrive as `AuthenticationException` / `AuthorizationException`.
+- Sources: `60 §2` (Java and SQL tables, "Cluster client: gRPC error → exception").
+
+### AP-30. Not checking the update count of a primary-key SQL `UPDATE` / `DELETE`
+
+- **Symptom**: code runs `UPDATE … WHERE <primary key> = …` or `DELETE … WHERE <primary key> = …` through the SQL API (or JDBC)
+  and assumes the row existed because no exception was thrown.
+- **Why it is wrong**: SQL has no counterpart of the Java API's `UnsatisfiedConditionException`. The statement runs as a Core
+  update / delete with `updateIfExists` / `deleteIfExists`, and when the row does not exist the unmet condition is swallowed: the
+  statement succeeds with **update count 0**. A missing row therefore goes unnoticed (for example, a balance update that
+  silently did nothing).
+- **Correct alternative**: read the count from the result (`ResultSet` of the mutation in the SQL API,
+  `executeUpdate()` in JDBC) and treat `0` as "row not found" where the business logic requires the row. If the row must exist
+  and be read anyway, `SELECT` it first in the same transaction.
+- Sources: `60 §2` ("Official handling guidance — SQL API").
+
 ---
 
 ## Part C. Applying the anti-patterns (checklists)
@@ -628,7 +659,8 @@ shape".
     commits synchronously (→ `10 §3`).
 - **Spring Boot / application code**: use `insert` / `upsert` / `update` / `delete` (AP-9); end every transaction in
   `finally` (AP-28); retry on `CrudConflictException` / `CommitConflictException` / `TransactionNotFoundException` from the beginning,
-  never on `UnsatisfiedConditionException` (AP-21, AP-22); no `join` / `resume` / 2PC (AP-15); Global Transaction code only for
+  never on `UnsatisfiedConditionException` (AP-21, AP-22) nor on auth-flagged failures (AP-29); check the update count of
+  primary-key SQL `UPDATE` / `DELETE` (AP-30); no `join` / `resume` / 2PC (AP-15); Global Transaction code only for
   Cluster targets, with the `end(Status)` template (AP-16, AP-17); unwrap the `RuntimeException` thrown while iterating a
   `Scanner` with for-each (→ `30 §2.1`).
 - **Error-log analysis**: link the codes of `60` to the anti-patterns (table C2) and show "error → anti-pattern → fix". Apply the

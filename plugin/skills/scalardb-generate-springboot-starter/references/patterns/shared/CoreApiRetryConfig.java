@@ -93,6 +93,13 @@ public class CoreApiRetryConfig {
                         || c instanceof UnsatisfiedConditionException) {
                     return false;
                 }
+                // ScalarDB Cluster reports authentication / authorization
+                // failures as a flagged TransactionException, not a separate
+                // class; retrying cannot change the result.
+                if (c instanceof TransactionException te
+                        && (te.isAuthenticationError() || te.isAuthorizationError())) {
+                    return false;
+                }
             }
             // Pass 2: any TransactionException in the chain is retryable.
             for (Throwable c = t; c != null; c = c.getCause()) {

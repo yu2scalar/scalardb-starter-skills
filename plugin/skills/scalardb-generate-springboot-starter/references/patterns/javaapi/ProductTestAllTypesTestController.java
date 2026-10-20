@@ -81,6 +81,7 @@ public class ProductTestAllTypesTestController {
         return switch (ex.getErrorCode()) {
             case 9100, 9400 -> new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
             case 9200, 9300 -> new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+            case 9600 -> new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
             case 9700 -> new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
             default -> new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
         };

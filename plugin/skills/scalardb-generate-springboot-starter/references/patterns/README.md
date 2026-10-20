@@ -18,7 +18,11 @@ of the user's schema.json**, substituting names, keys, and types.
 Both styles implement the SAME official-style policy: exclusions first
 (anywhere in the cause chain) because they subclass the retryable base types —
 Core API excludes `UnknownTransactionStatusException` /
-`UnsatisfiedConditionException` from the `TransactionException` family; SQL API
+`UnsatisfiedConditionException` from the `TransactionException` family, plus any
+`TransactionException` flagged `isAuthenticationError()` / `isAuthorizationError()`
+(ScalarDB Cluster reports auth failures that way, not as a separate class, so the
+built-in style uses a `predicate(...)` and the Spring Retry style checks the flags
+in `isRetryable`); SQL API
 excludes `UnknownTransactionStatusException` / `AuthenticationException` /
 `AuthorizationException` from the `SqlException` family. Everything else in the
 family is retried with bounded attempts + exponential backoff
@@ -46,11 +50,11 @@ closer to the source (e.g. repository not-found) is preserved:
 
 | code | meaning |
 |---|---|
-| 9100 | `UnsatisfiedConditionException` (Java API only) |
+| 9100 | Java API: `UnsatisfiedConditionException` (`updateIfExists` / `deleteIfExists` on a missing row). SQL API: a primary-key `UPDATE` / `DELETE` with update count 0 (`SqlRepository` throws `CustomException(…, 9100)`, because the SQL API reports a missing row only through the count) |
 | 9200 | `UnknownTransactionStatusException` — no rollback, never auto-retried; the message carries the transaction ID for manual verification (HTTP 500) |
 | 9300 | other `TransactionException` (Java) / `SqlException` (SQL) — retries exhausted |
 | 9400 | other `RuntimeException` |
 | 9500 | anything else |
-| 9600 | `AuthenticationException` / `AuthorizationException` (SQL API only) |
+| 9600 | authentication / authorization failure → HTTP 403. SQL API: `AuthenticationException` / `AuthorizationException`. Java API with ScalarDB Cluster: a `TransactionException` flagged `isAuthenticationError()` / `isAuthorizationError()`. Never retried |
 | 9700 | not-found (thrown by repositories as `CustomException`) → HTTP 404 |
 | 9800 | scenario business abort (preset scenario endpoints only; `ScenarioException`, transaction aborted, never retried) → HTTP 409 — see SKILL.md Phase 2.5 |

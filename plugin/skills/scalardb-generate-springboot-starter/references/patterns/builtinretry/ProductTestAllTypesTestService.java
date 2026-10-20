@@ -281,6 +281,10 @@ public class ProductTestAllTypesTestService {
         for (Throwable c = e; c != null; c = c.getCause()) {
             if (c instanceof UnsatisfiedConditionException) return 9100;
             if (c instanceof UnknownTransactionStatusException) return 9200;
+            // ScalarDB Cluster reports authentication / authorization failures
+            // as a flagged TransactionException (same code as the SQL API: 9600).
+            if (c instanceof TransactionException te
+                    && (te.isAuthenticationError() || te.isAuthorizationError())) return 9600;
         }
         for (Throwable c = e; c != null; c = c.getCause()) {
             if (c instanceof TransactionException) return 9300;
