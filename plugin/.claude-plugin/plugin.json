@@ -1,7 +1,7 @@
 {
   "name": "scalardb-starter-skills",
-  "version": "3.19.1.2",
-  "description": "Beginner-friendly skills to support your first ScalarDB Cluster app. Walk the skills in order to go from an empty Kubernetes cluster to a running Spring Boot CRUD REST application backed by ScalarDB Cluster: select and verify a Kubernetes environment (AKS / EKS / GKE / minikube), start demo PostgreSQL + MySQL databases in-cluster, generate ScalarDB Cluster config (Helm custom values + client properties, indirect mode, SQL enabled) through block-by-block Q&A, start ScalarDB Cluster via Helm with license-key Secret injection, generate a schema file from presets (Order-Inventory / Transfer), scaffold a Spring Boot starter exposing CRUD REST APIs in both the Java API and the SQL API, and audit existing configurations against a reference-backed rule catalog. Targets ScalarDB 3.19.1.",
+  "version": "3.19.1.3",
+  "description": "Beginner-friendly skills to support your first ScalarDB Cluster app. Walk the skills in order to go from an empty Kubernetes cluster to a running Spring Boot CRUD REST application backed by ScalarDB Cluster: select and verify a Kubernetes environment (AKS / EKS / GKE / minikube), start demo PostgreSQL + MySQL databases in-cluster, generate ScalarDB Cluster config (Helm custom values + client properties, indirect mode, SQL enabled) through block-by-block Q&A, start ScalarDB Cluster via Helm with license-key Secret injection, generate a schema file from presets (Order-Inventory / Transfer), scaffold a Spring Boot starter exposing CRUD REST APIs in both the Java API and the SQL API, audit existing configurations against a reference-backed rule catalog, and review how a Java application handles ScalarDB exceptions (rollback and retry after unknown commit status, retry policies, update counts, scanners). Targets ScalarDB 3.19.1.",
   "author": {
     "name": "Yuji Ochiai",
     "email": "yuji.ochiai@scalar-labs.com"

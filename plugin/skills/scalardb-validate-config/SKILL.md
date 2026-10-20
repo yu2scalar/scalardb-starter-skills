@@ -5,8 +5,8 @@ description: Read-only audit of an existing ScalarDB Cluster configuration - Hel
 
 # scalardb-validate-config
 
-> Status: **3.19.1.2 (2026-10-20 — bundled 60-error-codes.md / 70-design-decisions-and-antipatterns.md refreshed with the exception-handling guidance; no functional change in this skill); 3.19.1.1 (2026-10-14 — aligned to unified plugin versioning, no functional change in this skill); 3.19.1.0 (2026-10-14 — versions now follow ScalarDB as `<ScalarDB version>.<skill revision>`; retargeted to ScalarDB 3.19.1 / Helm chart 1.12.1, bundled references rebuilt from the 3.19.1 reference without internal source citations; v0.3.0 2026-08-05 = aligned to unified plugin versioning (springboot-starter: Boot 4.1 + selectable retry style), no functional change in this skill; v0.2.1 2026-07-23 = add rule C5, unreplaced contact-point placeholder; v0.1.0 2026-07-14 = initial implementation)**
-> Targets ScalarDB Cluster **3.19.1**. Skill 7 of 9 in the scalardb-starter-skills walk-through.
+> Status: **3.19.1.3 (2026-10-20 — walk-through extended to 10 skills (new: scalardb-review-exception-handling), no functional change in this skill); 3.19.1.2 (2026-10-20 — bundled 60-error-codes.md / 70-design-decisions-and-antipatterns.md refreshed with the exception-handling guidance; no functional change in this skill); 3.19.1.1 (2026-10-14 — aligned to unified plugin versioning, no functional change in this skill); 3.19.1.0 (2026-10-14 — versions now follow ScalarDB as `<ScalarDB version>.<skill revision>`; retargeted to ScalarDB 3.19.1 / Helm chart 1.12.1, bundled references rebuilt from the 3.19.1 reference without internal source citations; v0.3.0 2026-08-05 = aligned to unified plugin versioning (springboot-starter: Boot 4.1 + selectable retry style), no functional change in this skill; v0.2.1 2026-07-23 = add rule C5, unreplaced contact-point placeholder; v0.1.0 2026-07-14 = initial implementation)**
+> Targets ScalarDB Cluster **3.19.1**. Skill 7 of 10 in the scalardb-starter-skills walk-through.
 
 ## Overview
 

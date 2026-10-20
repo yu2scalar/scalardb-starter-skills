@@ -21,6 +21,7 @@ Run them in this order for the full walk-through. Each skill also works standalo
 | 7 | `scalardb-validate-config` | Read-only audit of existing ScalarDB configuration files (Helm values, client properties, schema.json) against a reference-backed rule catalog, including typo/enum/homoglyph lints. | **available** |
 | 8 | `scalardb-stop-scalardb-cluster` | Stop ScalarDB Cluster (`helm uninstall`), choosing between uninstall-only (Secret and namespace kept for a quick restart) and full cleanup. Backend data and schemas are never touched. | **available** |
 | 9 | `scalardb-stop-sample-db` | Stop the demo databases (demo data is discarded — volumes are non-persistent). | **available** |
+| 10 | `scalardb-review-exception-handling` | Read-only review of ScalarDB exception handling in your Java app — rollback / retry after unknown commit status, retry policies, update counts, scanners. Works on any Spring Boot or plain Java app, not only the generated one. | **available** |
 
 Skills land incrementally; the Status column tracks availability.
 
