@@ -46,7 +46,7 @@ closer to the source (e.g. repository not-found) is preserved:
 
 | code | meaning |
 |---|---|
-| 9100 | `UnsatisfiedConditionException` (Java API only) |
+| 9100 | Java API: `UnsatisfiedConditionException` (`updateIfExists` / `deleteIfExists` on a missing row). SQL API: a primary-key `UPDATE` / `DELETE` with update count 0 (`SqlRepository` throws `CustomException(…, 9100)`, because the SQL API reports a missing row only through the count) |
 | 9200 | `UnknownTransactionStatusException` — no rollback, never auto-retried; the message carries the transaction ID for manual verification (HTTP 500) |
 | 9300 | other `TransactionException` (Java) / `SqlException` (SQL) — retries exhausted |
 | 9400 | other `RuntimeException` |

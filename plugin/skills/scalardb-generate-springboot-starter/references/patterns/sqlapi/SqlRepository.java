@@ -356,7 +356,8 @@ public abstract class SqlRepository<T> {
         sql.append("\nWHERE ");
         sql.append(String.join(" AND ", whereClause));
 
-        session.execute(fixTimestampTzFormat(sql.toString()));
+        ResultSet resultSet = session.execute(fixTimestampTzFormat(sql.toString()));
+        requireRowAffected(resultSet, "update");
         return model;
     }
 
@@ -409,7 +410,25 @@ public abstract class SqlRepository<T> {
 
         sql.append(String.join(" AND ", conditions));
 
-        session.execute(fixTimestampTzFormat(sql.toString()));
+        ResultSet resultSet = session.execute(fixTimestampTzFormat(sql.toString()));
+        requireRowAffected(resultSet, "delete");
+    }
+
+    /**
+     * Fail a primary-key UPDATE / DELETE that matched no row.
+     *
+     * The SQL API has no counterpart of UnsatisfiedConditionException: a
+     * primary-key UPDATE / DELETE on a missing row succeeds with an update
+     * count of 0 instead of throwing. Treat 0 as "row not found" with the same
+     * code (9100) the Java API returns for updateIfExists / deleteIfExists, so
+     * both APIs report a missing row the same way. The mutation result is a
+     * single record with one INT column, "updateCount".
+     */
+    private void requireRowAffected(ResultSet resultSet, String operation) {
+        int updateCount = resultSet.one().map(r -> r.getInt(0)).orElse(0);
+        if (updateCount == 0) {
+            throw new CustomException("No record found to " + operation, 9100);
+        }
     }
 
     /**

@@ -120,6 +120,104 @@ the exception classes themselves have no category field.
 - The case "coordinator state absent after losing the commit-state race" is treated as a definitive abort and
   reported as `CommitConflictException` `DB-CORE-20015` (retryable), not as an unknown outcome.
 
+### Official handling guidance — Java Transaction API
+
+Official docs: `docs/api-guide.mdx` "How to handle exceptions" and `docs/two-phase-commit-transactions.mdx`
+"How to handle exceptions". The official guide warns that improper
+handling can cause "anomalies or data inconsistency" (`docs/api-guide.mdx:1983-1987`).
+
+| Exception | Thrown by | Meaning (official) | Roll back? | Retry? |
+|---|---|---|---|---|
+| `TransactionNotFoundException` | `begin()` / `beginReadOnly()` / `start*()`; 2PC `join()` / `resume()` | Failed to begin due to transient faults; for `resume()`: the ID was not found or expired | Nothing to roll back after `begin()` failed | **Yes**, retry the transaction (`docs/api-guide.mdx:1998`, `docs/two-phase-commit-transactions.mdx:665-667,702`) |
+| `TransactionException` (from `begin()`) | `begin()` / `beginReadOnly()` | Failed to begin due to transient or non-transient faults | Nothing to roll back | Yes, but it may keep failing if non-transient (`docs/api-guide.mdx:1997`) |
+| `CrudConflictException` | `get()` / `scan()` / `put()` / `delete()` / `mutate()` (and insert/upsert/update) | Transient fault, e.g. conflict | Yes (example) | **Yes, from the beginning** (`docs/api-guide.mdx:2007`) |
+| `CrudException` | same | Transient or non-transient | Yes (example) | Yes from the beginning, with a retry limit (`docs/api-guide.mdx:2006`) |
+| `UnsatisfiedConditionException` (subclass of `CrudException`) | mutations with a condition | The mutation condition was not met | **Yes** (example rolls back) | **No — handle per application requirements, then return** (`docs/api-guide.mdx:2009-2013,2079-2092`) |
+| `PreparationConflictException` / `PreparationException` | 2PC `prepare()` | Conflict / transient or non-transient | Yes (example) | Yes from the beginning (limit for the non-conflict class) (`docs/two-phase-commit-transactions.mdx:676-681`) |
+| `ValidationConflictException` / `ValidationException` | 2PC `validate()` | same | Yes (example) | same (`docs/two-phase-commit-transactions.mdx:683-688`) |
+| `CommitConflictException` | `commit()` | Transient fault, e.g. conflict | Yes (example) | **Yes, from the beginning** (`docs/api-guide.mdx:2020`) |
+| `CommitException` | `commit()` | Transient or non-transient | Yes (example) | Yes from the beginning, with a retry limit (`docs/api-guide.mdx:2019`) |
+| `UnknownTransactionStatusException` | `commit()` | Whether the commit succeeded is unknown | **No** (the example neither rolls back nor retries) | **No — first find out whether it committed; retry only if it failed.** Identifying the status is the user's job (e.g. an application status table updated in the same transaction) (`docs/api-guide.mdx:2021-2023,2093-2098`) |
+| `RollbackException` / `AbortException` | `rollback()` / `abort()` | Rolling back failed (transient or non-transient) | — | **No action needed: "the transaction should eventually recover"; just log it** (`docs/api-guide.mdx:2025-2029`) |
+
+The official example's structure (`docs/api-guide.mdx:2045-2120`), which a reviewer can compare code against:
+
+1. A retry loop around the **whole** transaction (`begin()` … `commit()`), with a maximum attempt count (3) and a
+   sleep (100 ms) between attempts; the last exception is rethrown when the attempts run out
+   (`docs/api-guide.mdx:2051-2064`). Any policy (e.g. exponential backoff) is allowed (`docs/api-guide.mdx:2035-2039`).
+2. `catch` order: **`UnsatisfiedConditionException` → `UnknownTransactionStatusException` → `TransactionException`**.
+   Because `UnsatisfiedConditionException` extends `CrudException` (and both unknown-status and the others extend
+   `TransactionException`), a broader `catch` placed first swallows them.
+3. `UnsatisfiedConditionException`: `rollback()` (ignore `RollbackException`), handle, `return` — no retry
+   (`docs/api-guide.mdx:2079-2092`).
+4. `UnknownTransactionStatusException`: `return` without rollback and without retry (`docs/api-guide.mdx:2093-2098`).
+5. Any other `TransactionException` (includes `TransactionNotFoundException`, `CrudException`, `CommitException`
+   and their conflict subclasses): `rollback()` if the transaction object exists (ignore `RollbackException`),
+   remember the exception, loop (`docs/api-guide.mdx:2099-2117`).
+6. 2PC: roll back **every** participant's transaction; if any participant committed, regard the transaction as
+   committed; if all failed and any failure was `UnknownTransactionStatusException`, throw that one (do not retry)
+   (`docs/two-phase-commit-transactions.mdx:530-545,618-639`). When the transaction ID is given explicitly, a retry
+   must use a **different ID** (`docs/two-phase-commit-transactions.mdx:708`).
+
+Javadoc agrees: `commit()` declares `CommitConflictException` ("retry from the beginning"), `CommitException`
+("try retrying … may still fail if nontransient") and `UnknownTransactionStatusException`; `rollback()` declares
+`RollbackException`, `abort()` declares `AbortException` (same for `TwoPhaseCommitTransaction`).
+
+### Official handling guidance — SQL API
+
+Official docs: `docs/scalardb-sql/sql-api-guide.mdx` "Execute transactions" and `docs/scalardb-sql/jdbc-guide.mdx`
+"Handle SQLException".
+
+- **All SQL API exceptions are unchecked.** `SqlException` extends `RuntimeException` and is "the base class for all
+  exceptions thrown by the SQL API"; obvious programming errors may surface as JDK runtime exceptions
+  (`IllegalArgumentException`, `IllegalStateException`) instead. The
+  compiler does not force a `try`/`catch`, so missing handling is a review point.
+
+| Exception (`com.scalar.db.sql.exception.*`) | Parent | Meaning | Roll back? | Retry? |
+|---|---|---|---|---|
+| `TransactionRetryableException` | `SqlException` | A retryable error | **Yes** (example) | **Yes, from the beginning** (`docs/scalardb-sql/sql-api-guide.mdx:349-351,361`) |
+| `TransactionConflictException` | `TransactionRetryableException` | A transaction conflict | Yes | Yes, from the beginning |
+| `TransactionNotFoundException` | `TransactionRetryableException` | The transaction for the given ID was not found | Yes | Yes, from the beginning |
+| `UnknownTransactionStatusException` | `SqlException` | Commit status unknown | Not in the example (see the caution below) | **No — check whether it committed; retry only if it failed** (`docs/scalardb-sql/sql-api-guide.mdx:338-342,355-358`) |
+| `AuthenticationException` / `AuthorizationException` | `SqlException` | Authentication / authorization failure (raised from Core errors flagged as auth errors) | Yes (falls into the `SqlException` branch) | Retrying does not help |
+| `SqlException` (other) | `RuntimeException` | Transient or non-transient | **Yes** (example) | Yes, but **limit the number of retries and give up** (`docs/scalardb-sql/sql-api-guide.mdx:343-352,360-363`) |
+
+- Official example (Transaction mode and 2PC mode are handled the same way, `docs/scalardb-sql/sql-api-guide.mdx:328-353,398-431`):
+  `catch (UnknownTransactionStatusException)` → check status, no rollback; `catch (SqlException)` →
+  `sqlSession.rollback()`, retry if `TransactionRetryableException`, otherwise retry with a limit.
+- Which Core exceptions become which SQL exceptions (direct mode): `CommitConflictException` / `CrudConflictException`
+  → `TransactionConflictException`; Core `UnknownTransactionStatusException` → SQL `UnknownTransactionStatusException`;
+  other `CommitException` → `SqlException` (or the auth subclasses); `TransactionNotFoundException` on join/resume → SQL
+  `TransactionNotFoundException`.
+- **There is no SQL counterpart of `UnsatisfiedConditionException`.** SQL `UPDATE` / `DELETE` with a primary-key
+  `WHERE` run as Core `update`/`delete` with `updateIfExists` / `deleteIfExists`, and an unmet condition is swallowed:
+  the statement succeeds with **update count 0**. Code that
+  needs "row must exist" must check the count.
+- **JDBC** (`docs/scalardb-sql/jdbc-guide.mdx:236-270`): everything arrives as `java.sql.SQLException`; distinguish by vendor code
+  (`getErrorCode()`), not by class. Codes: **301 = unknown transaction status**
+  (SQLState `2D000`, `SQLNonTransientException`) → check status, no rollback; **401 = transaction conflict**
+  (`40000`, `SQLTransactionRollbackException`) and **9909 = transaction not found** (`SDB09`,
+  `SQLTransientException`) → retryable; 9910 / 9911 = authentication / authorization error; others → roll back
+  (`connection.rollback()`) and retry with a limit. Multiple statements in one transaction require
+  `setAutoCommit(false)` (`docs/scalardb-sql/jdbc-guide.mdx:241-242`).
+
+### Rollback: required or optional, and what `rollback()` / `abort()` can throw
+
+Official rule: roll back on every failure **except** `UnknownTransactionStatusException`; a failed rollback needs no
+action (`docs/api-guide.mdx:2029,2079-2117`). What actually happens when an application skips or relies on rollback:
+
+| API / mode | What `rollback()` does | Can it throw? | If the app does not roll back after a failure |
+|---|---|---|---|
+| Java, Consensus Commit (one-phase) | Closes open scanners and releases a reserved group-commit slot; **writes nothing** (a failed `commit()` has already aborted itself) | Declared `RollbackException`, but this implementation does not throw it | Scanners stay open |
+| Java, `transaction_manager=jdbc` | `connection.rollback()` then `connection.close()` | **Yes**, `RollbackException` (`DB-CORE-30029`) | **After a CRUD failure, the pooled connection is held until `rollback()`** — a leak if never called. After a `commit()` failure the connection is already closed, so `rollback()` is a no-op |
+| Java, Cluster client | Sends rollback to the node; a missing transaction is ignored | **Yes**, `RollbackException` (including auth-login failures) | The node keeps the transaction until its idle expiry, default **60 s** |
+| SQL API (`SqlSession`) | Does nothing if no transaction is in progress; direct mode and Cluster SQL client **log a failed rollback at WARN and do not throw** | No (`RollbackException` is swallowed) | **The session keeps the failed transaction**: `commit()` clears it only on success, so the next `begin()` throws `IllegalStateException` `DB-SQL-10013` "The previous transaction is still in progress". In SQL, **rollback after any failure — including `UnknownTransactionStatusException` — is effectively required before reusing the session** |
+
+- `abort()` is an alias of `rollback()` everywhere.
+- Calling `rollback()` / `abort()` on a transaction ID after `UnknownTransactionStatusException` is not the same
+  as the instance method: `DistributedTransactionManager.rollback(txId)` may write ABORTED over a cleaned-up
+  committed transaction (see the bullets above this section).
+
 ### Cluster client: gRPC error → exception
 
 The Cluster client converts the node's gRPC error kind into Java exceptions (CRUD path; commit and the other
