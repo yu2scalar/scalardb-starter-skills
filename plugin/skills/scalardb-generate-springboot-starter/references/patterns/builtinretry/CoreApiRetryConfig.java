@@ -24,6 +24,11 @@ import org.springframework.core.retry.RetryTemplate;
  *   blind retry risks duplicate operations (manual verification required).
  * - UnsatisfiedConditionException: an application-logic outcome
  *   (condition not met); retrying cannot change the result.
+ * - Authentication / authorization failures from ScalarDB Cluster: they
+ *   arrive as a TransactionException (e.g. CrudException) flagged with
+ *   isAuthenticationError() / isAuthorizationError(), not as separate
+ *   classes, so excludes() cannot express them — the predicate below
+ *   rejects them; retrying cannot change the result.
  *
  * Retryable examples: CrudConflictException / CommitConflictException /
  * TransactionNotFoundException (transient by contract), and plain
@@ -55,11 +60,23 @@ public class CoreApiRetryConfig {
                 .includes(TransactionException.class)
                 .excludes(UnknownTransactionStatusException.class,
                         UnsatisfiedConditionException.class)
+                .predicate(t -> !isAuthError(t))
                 .maxRetries(retryProperties.getMaxAttempts() - 1)
                 .delay(Duration.ofMillis(retryProperties.getInitialDelayMs()))
                 .multiplier(retryProperties.getMultiplier())
                 .maxDelay(Duration.ofMillis(retryProperties.getMaxDelayMs()))
                 .build();
         return new RetryTemplate(retryPolicy);
+    }
+
+    /** True if any TransactionException in the cause chain is a Cluster auth failure. */
+    private static boolean isAuthError(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof TransactionException te
+                    && (te.isAuthenticationError() || te.isAuthorizationError())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
